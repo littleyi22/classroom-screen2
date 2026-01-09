@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>段考時程表Pro</title>
+    <style>
+        /* --- 1. 基礎與 RWD 佈局 --- */
+        :root { --sidebar-bg: #fcfcfc; --main-bg: #f0f2f5; --text-color: #333; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { height: 100%; font-family: "Microsoft JhengHei", sans-serif; overflow: hidden; }
+
+        .dashboard-container { display: grid; grid-template-columns: 50% 50%; grid-template-rows: 1fr 40px; height: 100vh; }
+
+        @media (max-width: 768px) {
+            .dashboard-container { grid-template-columns: 100%; }
+            .main-board { display: none; }
+            .sidebar-fixed { padding-top: 60px !important; }
+            #mobile-clock-header { display: flex !important; }
+        }
+
+        #mobile-clock-header {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 50px;
+            background: #fff; border-bottom: 1px solid #ddd; z-index: 5000;
+            justify-content: center; align-items: center; font-family: monospace; font-weight: bold; font-size: 24px; color: #333;
+        }
+
+        .panel { position: relative; padding: 25px; overflow-y: auto; transition: background 0.4s ease, color 0.4s ease; background-size: cover !important; }
+        .sidebar-fixed { background: var(--sidebar-bg); border-right: 2px solid #ddd; color: var(--text-color); }
+        .main-board { background: var(--main-bg); overflow: hidden; }
+
+        /* --- 2. 介面遮罩與動畫 --- */
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 9999; display: flex; justify-content: center; align-items: center; color: white; }
+        #save-loading { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; color: white; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #27ae60; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .login-box { background: #fff; color: #333; padding: 40px; border-radius: 12px; width: 400px; text-align: center; }
+        .login-box h2 { margin-bottom: 10px; color: #2c3e50; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        
+        .btn-primary { background: #3498db; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+        .btn-guest { background: #95a5a6; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; cursor: pointer; font-size: 14px; margin-bottom: 8px; }
+        .btn-reg-mode { background: #ecf0f1; color: #2c3e50; border: 1px solid #bdc3c7; padding: 10px; border-radius: 6px; width: 100%; cursor: pointer; font-size: 14px; font-weight: bold; }
+
+        /* --- 3. 工具列與表格 --- */
+        .toolbar { background: rgba(255,255,255,0.85); padding: 8px; border-radius: 8px; margin-bottom: 15px; display: flex; gap: 5px; flex-wrap: wrap; align-items: center; color: #333 !important; }
+        .btn { padding: 5px 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: white; font-size: 12px; font-weight: bold; color: #333; }
+        .btn:hover { background: #f8f9fa; }
+        .btn-save { background: #27ae60 !important; color: white !important; border: none; }
+        .btn-lock { background: #f39c12 !important; color: white !important; border: none; }
+
+        .title-area { display: flex; align-items: center; gap: 8px; }
+        .title-ctrl { display: flex; gap: 3px; }
+        .top-account-info { margin-left: auto; font-size: 12px; font-weight: bold; opacity: 0.8; padding-right: 5px; }
+
+        .exam-table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.2); table-layout: fixed; color: inherit; }
+        .exam-table th, .exam-table td { border: 1px solid rgba(150,150,150,0.5); padding: 6px; text-align: center; overflow-wrap: anywhere; vertical-align: middle; position: relative; }
+        .exam-table td:nth-child(1) { text-align: left; padding-left: 8px; }
+        
+        .resizer { position: absolute; right: 0; top: 0; width: 6px; cursor: col-resize; height: 100%; z-index: 5; }
+        .energy-bar { width: 100%; height: 14px; background: rgba(0,0,0,0.1); border-radius: 7px; overflow: hidden; }
+        .energy-fill { width: 100%; height: 100%; background: #4caf50; transition: width 1s, background-color 0.5s; }
+        
+        /* 修正：管理欄位按鈕強制橫排 */
+        .mgmt-cell { 
+            display: flex !important; 
+            flex-direction: row !important; 
+            flex-wrap: nowrap !important; 
+            gap: 4px; 
+            align-items: center; 
+            justify-content: center;
+            width: 100%;
+        }
+        
+        .btn-sm { width: 26px; height: 26px; border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: #333; position: relative; overflow: hidden; flex-shrink: 0; }
+        .btn-sm input[type="color"] { position: absolute; top: -10px; left: -10px; width: 50px; height: 50px; cursor: pointer; opacity: 0; }
+
+        /* --- 4. 小工具 --- */
+        .widget { position: absolute; background: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 35px 15px 15px; min-width: 100px; resize: both; overflow: hidden; z-index: 10; color: #333; }
+        .widget-handle { position: absolute; top: 0; left: 0; width: 100%; height: 35px; background: rgba(0,0,0,0.03); cursor: move; }
+        .widget-ctrl { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; z-index: 30; }
+        .btn-close { background: #ff5f56; color: white; border: none; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; cursor: pointer; }
+
+        /* 指針時鐘樣式修正 */
+        .clock-face { fill: white; stroke: #333; stroke-width: 2; }
+        .hand { transform-origin: 50px 50px; stroke-linecap: round; }
+        .hand-hour { stroke: #333; stroke-width: 4; transition: transform 0.5s cubic-bezier(0.4, 2.08, 0.55, 0.44); }
+        .hand-min { stroke: #666; stroke-width: 3; transition: transform 0.5s cubic-bezier(0.4, 2.08, 0.55, 0.44); }
+        .hand-sec { stroke: #e74c3c; stroke-width: 1.5; }
+
+        /* 便利貼顏色修正 */
+        .widget-note { background: #fff2ab !important; border-bottom-right-radius: 30px; border: 1px solid #e6db99; }
+        .widget-note::after { content: ""; position: absolute; bottom: 0; right: 0; width: 30px; height: 30px; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%); pointer-events: none; }
+
+        .widget-announce { border-left: 8px solid #e74c3c; }
+        .clock-digit { font-family: monospace; font-weight: bold; text-align: center; pointer-events: none; width: 100%; }
+        .style-hacker { background: #000 !important; color: #00ff00 !important; text-shadow: 0 0 5px #00ff00; border: 2px solid #333; }
+        .style-hacker .clock-digit { color: #00ff00 !important; }
+        
+        .widget textarea { width: 100%; border: none; background: transparent; outline: none; resize: none; font-family: inherit; font-size: 16px; color: inherit; }
+
+        /* 鎖定樣式 */
+        .locked .resizer, .locked .widget-ctrl, .locked .widget-handle, .locked .mgmt-cell button, .locked .mgmt-cell label, .locked .title-ctrl { display: none !important; }
+        .locked .widget { resize: none !important; }
+
+        /* 背景選單 */
+        .bg-menu { display: none; position: absolute; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 10px; z-index: 2000; width: 260px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .bg-option-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .bg-btn { width: 100%; height: 40px; border: 1px solid #ddd; cursor: pointer; border-radius: 6px; font-size: 10px; font-weight: bold; }
+
+        .footer { grid-column: 1/3; background: #2c3e50; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    </style>
+</head>
+<body id="main-body">
+
+<div id="mobile-clock-header">00:00:00</div>
+
+<div id="save-loading">
+    <div class="spinner"></div>
+    <div id="loading-text">雲端存檔中...</div>
+</div>
+
+<div id="login-overlay">
+    <div class="login-box">
+        <h2 id="auth-title">登入儀表板</h2>
+        <div id="input-area">
+            <input type="text" id="user-id" placeholder="帳號 (流水號 0001)">
+            <input type="password" id="user-pw" placeholder="密碼">
+        </div>
+        <button type="button" class="btn-primary" id="auth-main-btn" onclick="window.handleAuth()">進入系統</button>
+        <button type="button" class="btn-guest" id="guest-btn" onclick="window.handleGuestLogin()">訪客登入</button>
+        <button type="button" class="btn-reg-mode" id="auth-toggle-btn" onclick="window.toggleAuthMode()">註冊</button>
+    </div>
+</div>
+
+<div class="dashboard-container">
+    <aside class="panel sidebar-fixed" id="left-panel">
+        <div class="toolbar">
+            <div class="title-area">
+                <h2 contenteditable="true" id="db-title">本學期段考時程</h2>
+                <div class="title-ctrl">
+                    <button class="btn-sm" onclick="window.toggleTitleBold()">B</button>
+                    <label class="btn-sm">A<input type="color" onchange="window.changeTitleColor(this.value)"></label>
+                </div>
+            </div>
+            <button class="btn" onclick="window.addTableRow()">+新增</button>
+            <button class="btn" onclick="window.changeFontSize(2)">A+</button>
+            <button class="btn" onclick="window.changeFontSize(-2)">A-</button>
+            <button class="btn" onclick="window.openBgMenu('left', event)">🎨背景</button>
+            <button class="btn btn-lock" id="btn-lock" onclick="window.toggleLock()">🔓 解鎖中</button>
+            <button class="btn btn-save" onclick="window.saveData()">💾存檔</button>
+            <span class="top-account-info" id="top-display-id">ID: ----</span>
+            <button class="btn" onclick="window.logout()">登出</button>
+        </div>
+        <table class="exam-table" id="exam-table">
+            <thead>
+                <tr><th id="th-1" style="width:25%">科目</th><th id="th-2" style="width:20%">時間</th><th id="th-3" style="width:25%">能量條</th><th id="th-4" style="width:30%">管理</th></tr>
+            </thead>
+            <tbody id="exam-tbody"></tbody>
+        </table>
+    </aside>
+
+    <main class="panel main-board" id="right-panel">
+        <div class="toolbar">
+            <button class="btn" onclick="createWidget('digital', null, 'default')">+數位(白)</button>
+            <button class="btn" onclick="createWidget('digital', null, 'hacker')">+數位(黑綠)</button>
+            <button class="btn" onclick="createWidget('analog')">+指針時鐘</button>
+            <button class="btn" onclick="createWidget('note')">+便利貼</button>
+            <button class="btn" onclick="createWidget('announce')">+公告欄</button>
+            <button class="btn" onclick="openBgMenu('right', event)">🎨背景</button>
+        </div>
+    </main>
+
+    <div id="bg-selector" class="bg-menu">
+        <div class="bg-option-grid">
+            <button class="bg-btn" style="background:#ffffff" onclick="window.setPanelBg('#ffffff', '#333')">純白</button>
+            <button class="bg-btn" style="background:#f0f2f5" onclick="window.setPanelBg('#f0f2f5', '#333')">簡約灰</button>
+            <button class="bg-btn" style="background:#e8f5e9" onclick="window.setPanelBg('#e8f5e9', '#333')">粉嫩綠</button>
+            <button class="bg-btn" style="background:#fff3e0" onclick="window.setPanelBg('#fff3e0', '#333')">粉嫩橘</button>
+            <button class="bg-btn" style="background:linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)" onclick="window.setPanelBg('linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', '#333')">海洋藍</button>
+            <button class="bg-btn" style="background:linear-gradient(135deg, #f6d365 0%, #fda085 100%)" onclick="window.setPanelBg('linear-gradient(135deg, #f6d365 0%, #fda085 100%)', '#333')">晨曦橘</button>
+            <button class="bg-btn" style="background:linear-gradient(to right, #243b55, #141e30)" onclick="window.setPanelBg('linear-gradient(to right, #243b55, #141e30)', '#fff')">午夜藍</button>
+            <button class="bg-btn" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%)" onclick="window.setPanelBg('linear-gradient(135deg, #667eea 0%, #764ba2 100%)', '#fff')">深邃紫</button>
+            <button class="bg-btn" style="background:linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)" onclick="window.setPanelBg('linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', '#333')">薄荷綠</button>
+            <button class="bg-btn" style="background:linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" onclick="window.setPanelBg('linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', '#fff')">浪漫粉</button>
+            <button class="bg-btn" style="background:#2c3e50" onclick="window.setPanelBg('#2c3e50', '#fff')">深鐵灰</button>
+            <button class="bg-btn" style="background:#fef9e7" onclick="window.setPanelBg('#fef9e7', '#333')">米黃紙</button>
+        </div>
+    </div>
+
+    <footer class="footer">帳號：<span id="display-id">---</span> | 奕鈞老師製作 &copy; 2026</footer>
+</div>
+
+<script>
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbwX1dAzFJPH-T0gflLIX8X2VxHBnxYs3n0oWzK8cMZTErzzTEgL9yODXUcoZ2tWead3/exec'; 
+
+    var currentUser = { id: '', pw: '' };
+    var isRegisterMode = false;
+    var activePanelId = '';
+    var isLocked = false;
+
+    // --- 1. 登入系統 ---
+    window.toggleAuthMode = function() {
+        isRegisterMode = !isRegisterMode;
+        var authTitle = document.getElementById('auth-title');
+        var inputArea = document.getElementById('input-area');
+        var mainBtn = document.getElementById('auth-main-btn');
+        var guestBtn = document.getElementById('guest-btn');
+        var toggleBtn = document.getElementById('auth-toggle-btn');
+
+        if (isRegisterMode) {
+            authTitle.innerText = "設定新密碼";
+            inputArea.innerHTML = '<p style="font-size:15px; color:#e67e22; margin-bottom:10px; font-weight:bold;">系統會配發 4 個數字的帳號給你</p>' +
+                                '<input type="password" id="user-pw" placeholder="請設定 4 位數字密碼 (如 0523)" maxlength="4">';
+            mainBtn.innerText = "獲取帳號並登入";
+            guestBtn.style.display = "none";
+            toggleBtn.innerText = "返回登入";
+        } else {
+            authTitle.innerText = "登入儀表板";
+            inputArea.innerHTML = '<input type="text" id="user-id" placeholder="帳號 (流水號 0001)">' +
+                                '<input type="password" id="user-pw" placeholder="密碼">';
+            mainBtn.innerText = "進入系統";
+            guestBtn.style.display = "block";
+            toggleBtn.innerText = "註冊";
+        }
+    };
+
+    window.handleAuth = async function() {
+        var idIn = document.getElementById('user-id');
+        var pwIn = document.getElementById('user-pw');
+        var idVal = idIn ? idIn.value : "";
+        var rawPw = pwIn ? pwIn.value : "";
+        var pwVal = rawPw.toString().padStart(4, '0');
+
+        if (isRegisterMode && !/^\d{4}$/.test(pwVal)) { alert("密碼請設定為 4 位數字！"); return; }
+        if (!isRegisterMode && !idVal) { alert("請輸入帳號"); return; }
+        if (!rawPw) { alert("請輸入密碼"); return; }
+
+        var btn = document.getElementById('auth-main-btn');
+        btn.disabled = true; btn.innerText = "連線中...";
+
+        try {
+            var res = await fetch(GAS_URL, { method: 'POST', mode: 'cors', body: JSON.stringify({ action: isRegisterMode ? "register" : "login", userID: idVal, password: pwVal }) });
+            var result = await res.json();
+            if (result.success) {
+                alert(result.message);
+                currentUser.id = (result.userID || idVal).toString().padStart(4, '0');
+                currentUser.pw = pwVal;
+                document.getElementById('display-id').innerText = currentUser.id;
+                document.getElementById('top-display-id').innerText = "ID: " + currentUser.id;
+                document.getElementById('login-overlay').style.display = 'none';
+                if (result.dashboardData) window.loadDashboard(JSON.parse(result.dashboardData));
+            } else { alert(result.message); }
+        } catch (e) { alert("連線失敗！"); }
+        finally { btn.disabled = false; btn.innerText = isRegisterMode ? "獲取帳號" : "進入系統"; }
+    };
+
+    window.handleGuestLogin = function() {
+        currentUser.id = "訪客"; currentUser.pw = "";
+        document.getElementById('display-id').innerText = "訪客 (無存檔功能)";
+        document.getElementById('top-display-id').innerText = "訪客";
+        document.getElementById('login-overlay').style.display = 'none';
+    };
+
+    window.logout = function() {
+        alert("您的帳號是 " + currentUser.id + "，已登出");
+        location.reload();
+    };
+
+    // --- 2. 存取邏輯 ---
+    window.saveData = async function() {
+        if (!currentUser.id || currentUser.id === "訪客") { alert("訪客無法存檔！"); return; }
+        var titleEl = document.getElementById('db-title');
+        var data = {
+            title: titleEl.innerText, titleBold: titleEl.style.fontWeight === 'bold', titleColor: titleEl.style.color,
+            leftBg: document.getElementById('left-panel').style.background, rightBg: document.getElementById('right-panel').style.background,
+            panelTextColor: document.getElementById('left-panel').style.color, tableFontSize: document.getElementById('exam-table').style.fontSize,
+            isLocked: isLocked,
+            colWidths: [document.getElementById('th-1').style.width, document.getElementById('th-2').style.width, document.getElementById('th-3').style.width, document.getElementById('th-4').style.width],
+            table: [], widgets: []
+        };
+        document.querySelectorAll('#exam-tbody tr').forEach(function(row) {
+            data.table.push({ subject: row.cells[0].innerText, time: row.cells[1].innerText, bold: row.style.fontWeight === 'bold', color: row.style.color });
+        });
+        document.querySelectorAll('.widget').forEach(function(w) {
+            var type = w.classList.contains('widget-digital') ? 'digital' : (w.classList.contains('widget-analog') ? 'analog' : (w.classList.contains('widget-announce') ? 'announce' : 'note'));
+            var txt = w.querySelector('textarea');
+            data.widgets.push({ 
+                type, top: w.style.top, left: w.style.left, width: w.style.width, height: w.style.height, 
+                content: txt ? txt.value : '', extra: w.querySelector('input') ? w.querySelector('input').value : '',
+                fontSize: txt ? txt.style.fontSize : '16px', hacker: w.classList.contains('style-hacker')
+            });
+        });
+
+        if (JSON.stringify(data).length > 20000) { alert("內容過長限制。"); return; }
+        document.getElementById('save-loading').style.display = 'flex';
+        try {
+            var res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: "save", userID: currentUser.id, password: currentUser.pw, dashboardData: JSON.stringify(data) }) });
+            var resJ = await res.json(); alert(resJ.message);
+        } catch (e) { alert("存檔失敗。"); }
+        finally { document.getElementById('save-loading').style.display = 'none'; }
+    };
+
+    window.loadDashboard = function(data) {
+        if (!data) return;
+        var titleEl = document.getElementById('db-title');
+        titleEl.innerText = data.title || "本學期段考時程";
+        titleEl.style.fontWeight = data.titleBold ? 'bold' : 'normal';
+        titleEl.style.color = data.titleColor || 'inherit';
+
+        document.getElementById('left-panel').style.background = data.leftBg || "";
+        document.getElementById('right-panel').style.background = data.rightBg || "";
+        document.getElementById('left-panel').style.color = data.panelTextColor || "inherit";
+        document.getElementById('exam-table').style.fontSize = data.tableFontSize || "16px";
+        if (data.colWidths) data.colWidths.forEach(function(w, i) { if(w) document.getElementById('th-' + (i+1)).style.width = w; });
+        document.getElementById('exam-tbody').innerHTML = "";
+        if(data.table) data.table.forEach(function(item) { window.addTableRow(item); });
+        if(data.widgets) data.widgets.forEach(function(w) { createWidget(w.type, w, w.hacker ? 'hacker' : 'default'); });
+        if(data.isLocked) window.toggleLock(true);
+    };
+
+    // --- 3. UI 功能 ---
+    window.toggleTitleBold = function() { var el = document.getElementById('db-title'); el.style.fontWeight = (el.style.fontWeight === 'bold' ? 'normal' : 'bold'); };
+    window.changeTitleColor = function(c) { document.getElementById('db-title').style.color = c; };
+
+    window.toggleLock = function(forceLock) {
+        isLocked = (typeof forceLock === 'boolean') ? forceLock : !isLocked;
+        var btn = document.getElementById('btn-lock');
+        var body = document.getElementById('main-body');
+        if (isLocked) {
+            btn.innerText = "🔒 已鎖定"; btn.style.background = "#e74c3c"; body.classList.add('locked');
+            document.getElementById('db-title').contentEditable = "false";
+            document.querySelectorAll('#exam-tbody td[contenteditable]').forEach(function(el) { el.contentEditable = "false"; });
+            document.querySelectorAll('textarea, input:not([type="color"])').forEach(function(el) { el.readOnly = true; });
+        } else {
+            btn.innerText = "🔓 解鎖中"; btn.style.background = "#f39c12"; body.classList.remove('locked');
+            document.getElementById('db-title').contentEditable = "true";
+            document.querySelectorAll('#exam-tbody td').forEach(function(el, idx) { if(idx % 4 < 2) el.contentEditable = "true"; });
+            document.querySelectorAll('textarea, input:not([type="color"])').forEach(function(el) { el.readOnly = false; });
+        }
+    };
+
+    window.addTableRow = function(data) {
+        var tr = document.createElement('tr');
+        if(data && data.bold) tr.style.fontWeight = 'bold';
+        if(data && data.color) tr.style.color = data.color;
+        // 修正：管理欄位內容包在 mgmt-cell 內，強制按鈕橫排
+        tr.innerHTML = '<td>' + (data ? data.subject : '新科目') + '</td><td contenteditable="true">' + (data ? data.time : '08:00-09:00') + '</td><td><div class="energy-bar"><div class="energy-fill"></div></div></td>' +
+            '<td><div class="mgmt-cell"><button class="btn-sm" onclick="window.toggleRowBold(this)">B</button>' +
+            '<label class="btn-sm">A<input type="color" value="' + (data?.color || '#000000') + '" onchange="this.closest(\'tr\').style.color=this.value"></label>' +
+            '<button class="btn-sm" style="color:red" onclick="this.closest(\'tr\').remove()">✖</button></div></td>';
+        var subCell = tr.cells[0]; subCell.contentEditable = "true";
+        subCell.addEventListener('input', function() { if (this.innerText.length > 20) { this.innerText = this.innerText.substring(0, 20); alert("科目上限 20 字"); } });
+        document.getElementById('exam-tbody').appendChild(tr);
+    };
+
+    window.toggleRowBold = function(btn) { if(isLocked) return; var r = btn.closest('tr'); r.style.fontWeight = (r.style.fontWeight === 'bold' ? 'normal' : 'bold'); };
+    window.changeFontSize = function(d) { if(isLocked) return; var t = document.getElementById('exam-table'); var s = parseInt(window.getComputedStyle(t).fontSize) || 16; t.style.fontSize = (s + d) + 'px'; };
+    window.openBgMenu = function(p, e) { if(isLocked) return; activePanelId = p + '-panel'; var m = document.getElementById('bg-selector'); m.style.display = 'block'; m.style.left = e.pageX + 'px'; m.style.top = e.pageY + 'px'; e.stopPropagation(); };
+    window.setPanelBg = function(s, textColor) { 
+        var p = document.getElementById(activePanelId); p.style.background = s; 
+        if(textColor) p.style.color = textColor; 
+        document.getElementById('bg-selector').style.display = 'none'; 
+    };
+
+    // --- 4. 小工具 ---
+    function createWidget(type, data, styleType) {
+        var board = document.getElementById('right-panel');
+        var w = document.createElement('div');
+        w.className = 'widget widget-' + type;
+        if (styleType === 'hacker') w.classList.add('style-hacker');
+        w.style.top = data?.top || '100px'; w.style.left = data?.left || '100px';
+        w.style.width = data?.width || (type === 'digital' ? '250px' : '220px');
+        w.style.height = data?.height || (type === 'digital' ? '120px' : '220px');
+        var html = '<div class="widget-handle"></div><div class="widget-ctrl">';
+        if (type === 'announce') { html += '<button class="btn-widget" onclick="window.zoomText(this, 2)">A+</button><button class="btn-widget" onclick="window.zoomText(this, -2)">A-</button>'; }
+        html += '<button class="btn-close" onclick="this.closest(\'.widget\').remove()">×</button></div>';
+        if (type === 'digital') {
+            html += '<div class="clock-digit">00:00:00</div>';
+            new ResizeObserver(function(entries) { for(var entry of entries) { var digit = entry.target.querySelector('.clock-digit'); if(digit) digit.style.fontSize = (entry.target.offsetWidth / 5) + 'px'; } }).observe(w);
+        } else if (type === 'analog') {
+            var svg = '<svg viewBox="0 0 100 100" style="width:95%; height:95%"><circle class="clock-face" cx="50" cy="50" r="48" fill="white" stroke="#333" stroke-width="2"/>';
+            for(let i=1; i<=12; i++) {
+                let a = (i * 30) * (Math.PI / 180);
+                svg += '<text x="' + (50+38*Math.sin(a)) + '" y="' + (50-38*Math.cos(a)) + '" style="font-size:8px;font-weight:bold;fill:#333;text-anchor:middle;dominant-baseline:middle;">'+i+'</text>';
+                svg += '<line x1="'+(50+44*Math.sin(a))+'" y1="'+(50-44*Math.cos(a))+'" x2="'+(50+48*Math.sin(a))+'" y2="'+(50-48*Math.cos(a))+'" stroke="#333" stroke-width="2"/>';
+            }
+            svg += '<line x1="50" y1="50" x2="50" y2="28" class="hand hand-hour" /><line x1="50" y1="50" x2="50" y2="18" class="hand hand-min" /><line x1="50" y1="50" x2="50" y2="12" class="hand hand-sec" /><circle cx="50" cy="50" r="2.5" fill="#333"/></svg>';
+            html += svg;
+        } else if (type === 'note' || type === 'announce') {
+            var fs = data?.fontSize || '16px';
+            html += (type === 'announce' ? '<input value="'+(data?.extra || '今日公告')+'" style="font-weight:bold; color:#e74c3c" maxlength="20">' : '') +
+                    '<textarea maxlength="200" style="height:80%; font-size:'+fs+'">'+(data?.content || '')+'</textarea>';
+        }
+        w.innerHTML = html; board.appendChild(w); makeDraggable(w);
+    }
+
+    window.zoomText = function(btn, d) { var txt = btn.closest('.widget').querySelector('textarea'); var s = parseInt(window.getComputedStyle(txt).fontSize) || 16; txt.style.fontSize = (s + d) + 'px'; };
+
+    function makeDraggable(el) {
+        var h = el.querySelector('.widget-handle');
+        h.addEventListener('mousedown', function(e) {
+            if (isLocked) return;
+            var ox = e.clientX - el.offsetLeft, oy = e.clientY - el.offsetTop;
+            document.querySelectorAll('.widget').forEach(function(w) { w.style.zIndex = 10; }); el.style.zIndex = 100;
+            const move = function(ev) { el.style.left = (ev.clientX - ox) + 'px'; el.style.top = (ev.clientY - oy) + 'px'; };
+            const stop = function() { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
+            document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
+        });
+    }
+
+    // --- 5. 循環更新與初始化 ---
+    function initResizableTable() {
+        document.querySelectorAll('th').forEach(function(th) {
+            var resizer = document.createElement('div'); resizer.className = 'resizer'; th.appendChild(resizer);
+            resizer.addEventListener('mousedown', function(e) {
+                if (isLocked) return;
+                var startX = e.pageX, startW = th.offsetWidth;
+                var mm = function(ev) { th.style.width = (startW + (ev.pageX - startX)) + 'px'; };
+                var mu = function() { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+                document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+            });
+        });
+    }
+
+    setInterval(function() {
+        var now = new Date();
+        var timeStr = now.toTimeString().split(' ')[0];
+        document.querySelectorAll('.clock-digit').forEach(function(c) { c.innerText = timeStr; });
+        document.getElementById('mobile-clock-header').innerText = timeStr;
+
+        document.querySelectorAll('.widget-analog').forEach(clock => {
+            const h = now.getHours() % 12, m = now.getMinutes(), s = now.getSeconds();
+            const hDeg = (h * 30) + (m / 2);
+            const mDeg = (m * 6);
+            const sDeg = (s * 6);
+            clock.querySelector('.hand-hour').style.transform = `rotate(${hDeg}deg)`;
+            clock.querySelector('.hand-min').style.transform = `rotate(${mDeg}deg)`;
+            clock.querySelector('.hand-sec').style.transform = `rotate(${sDeg}deg)`;
+        });
+
+        document.querySelectorAll('#exam-tbody tr').forEach(function(row) {
+            try {
+                var times = row.cells[1].innerText.split('-');
+                if(times.length < 2) return;
+                var sArr = times[0].split(':'), eArr = times[1].split(':');
+                var st = new Date(), et = new Date(); st.setHours(sArr[0], sArr[1], 0); et.setHours(eArr[0], eArr[1], 0);
+                var p = 100; if (now > et) p = 0; else if (now > st) p = ((et - now) / (et - st)) * 100;
+                var fill = row.querySelector('.energy-fill');
+                if(fill) { fill.style.width = p + '%'; fill.style.backgroundColor = p > 50 ? '#4caf50' : (p > 20 ? '#ffeb3b' : '#f44336'); }
+            } catch(e) {}
+        });
+    }, 1000);
+
+    window.onclick = function() { var m = document.getElementById('bg-selector'); if(m) m.style.display='none'; };
+    initResizableTable();
+</script>
+</body>
+</html>
