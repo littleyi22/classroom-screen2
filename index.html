@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>段考時程表Pro</title>
+    <title>段考時程表Pro2</title>
     <style>
         /* --- 1. 基礎與 RWD 佈局 --- */
         :root { --sidebar-bg: #fcfcfc; --main-bg: #f0f2f5; --text-color: #333; }
@@ -73,24 +73,6 @@
         .widget-handle { position: absolute; top: 0; left: 0; width: 100%; height: 35px; background: rgba(0,0,0,0.03); cursor: move; }
         .widget-ctrl { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; z-index: 30; }
         .btn-close { background: #ff5f56; color: white; border: none; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; cursor: pointer; }
-/* 新增這個樣式讓 A+ A- 按鈕好看一點 */
-.btn-widget {
-    background: white;
-    border: 1px solid #ccc;
-    color: #333;
-    width: 24px;
-    height: 18px;
-    border-radius: 4px;
-    font-size: 10px;
-    cursor: pointer;
-    margin-right: 2px;
-    font-weight: bold;
-}
-.btn-widget:hover {
-    background: #f0f0f0;
-    color: #000;
-}
-
 
         .clock-face { fill: white; stroke: #333; stroke-width: 2; }
         .hand { transform-origin: 50px 50px; stroke-linecap: round; }
@@ -250,7 +232,7 @@
 </div>
 
 <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbwN2TyQCQSZ8X8oTMzOPLoSv4upcRO5TuI3Fogve-nygWoWh5iX1ZrLslhMDgnwrzkWGw/exec'; 
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbwX1dAzFJPH-T0gflLIX8X2VxHBnxYs3n0oWzK8cMZTErzzTEgL9yODXUcoZ2tWead3/exec'; 
 
     var currentUser = { id: '', pw: '' };
     var isRegisterMode = false;
@@ -556,13 +538,9 @@
              else { w.style.width='220px'; w.style.height='220px'; }
         }
 
-       var html = '<div class="widget-handle"></div><div class="widget-ctrl">';
-// ↓↓↓ 修改這一行，加上 || type === 'note' ↓↓↓
-if (type === 'announce' || type === 'note') { 
-    html += '<button class="btn-widget" onclick="window.zoomText(this, 2)">A+</button><button class="btn-widget" onclick="window.zoomText(this, -2)">A-</button>'; 
-}
-// ↑↑↑ 修改結束 ↑↑↑
-html += '<button class="btn-close" onclick="this.closest(\'.widget\').remove()">×</button></div>';
+        var html = '<div class="widget-handle"></div><div class="widget-ctrl">';
+        if (type === 'announce') { html += '<button class="btn-widget" onclick="window.zoomText(this, 2)">A+</button><button class="btn-widget" onclick="window.zoomText(this, -2)">A-</button>'; }
+        html += '<button class="btn-close" onclick="this.closest(\'.widget\').remove()">×</button></div>';
         
         if (type === 'digital') {
             html += '<div class="clock-digit">00:00:00</div>';
